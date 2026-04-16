@@ -1,7 +1,7 @@
 # razorpier
 
 Razor ファイル向けの `Prettier` / `CSharpier` 相当 formatter です。  
-`CSharpier` の補完プロジェクトとして、同等の使い勝手と設計方針を目指します。
+`CSharpier` の補完的プロジェクトとして、同等の使い勝手と設計方針を目指します。
 
 ## ポリシー
 
@@ -17,13 +17,13 @@ Razor ファイル内のトップレベル要素を、以下の順で自動ソ�
 1. `@using`
 2. `@page`
 3. `@attributes`
-4. Razor contents（markup / directive などの本文）
+4. Razor markup（`razor-contents` / markup / directive などの本文）
 5. `@inject`
 6. `@code`（Razor code）
 
 ### ブロック別の整形方針
 
-- Razor contents
+- Razor markup（`razor-contents`）
   - 一般的な HTML-like formatter の振る舞いを参考に整形
 - `@code` 内部
   - `CSharpier` API を呼び出して C# を整形
