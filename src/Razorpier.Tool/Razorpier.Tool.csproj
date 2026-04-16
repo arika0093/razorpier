@@ -12,6 +12,12 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>razorpier</ToolCommandName>
     <PackageId>Razorpier.Tool</PackageId>
+    <Description>dotnet tool for formatting Razor files with Razorpier.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

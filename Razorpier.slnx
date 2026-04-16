@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/Razorpier.Core/Razorpier.Core.csproj" />
-    <Project Path="src/Razorpier.Tool/Razorpier.Tool.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/Razorpier.Tests/Razorpier.Tests.csproj" />
-  </Folder>
-</Solution>

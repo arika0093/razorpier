@@ -28,7 +28,12 @@ Razor ファイル内のトップレベル要素を、以下の順で自動ソ�
 - `@code` 内部
   - `CSharpier` API を呼び出して C# を整形
 
-## 提供形態
+## 現状の実装
+
+- API パッケージ（`Razorpier.Core`）
+- dotnet tool（`Razorpier.Tool`）
+
+## 目標提供形態
 
 `CSharpier` 周辺エコシステムに準じて、以下の利用形態を提供します。
 
@@ -37,3 +42,27 @@ Razor ファイル内のトップレベル要素を、以下の順で自動ソ�
 - dotnet tool
 - MSBuild 連携
 - API パッケージ
+
+## 使い方
+
+### API
+
+```csharp
+using Razorpier.Core;
+
+var formatted = RazorFormatter.Format(source);
+```
+
+### dotnet tool
+
+```bash
+dotnet run --project src/Razorpier.Tool/Razorpier.Tool.csproj -- path/to/Component.razor
+dotnet run --project src/Razorpier.Tool/Razorpier.Tool.csproj -- --check path/to/Component.razor
+```
+
+### テスト
+
+```bash
+dotnet build Razorpier.sln
+dotnet run --project tests/Razorpier.Tests/Razorpier.Tests.csproj
+```
