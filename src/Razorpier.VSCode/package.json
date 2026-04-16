@@ -25,7 +25,7 @@
     ]
   },
   "scripts": {
-    "build:server": "dotnet publish ../Razorpier.Tool/Razorpier.Tool.csproj -c Debug -o ./server",
-    "test": "node --test ./test/**/*.test.js"
+    "build:server": "dotnet publish ../Razorpier.Tool/Razorpier.Tool.csproj -c Debug -p:UseAppHost=false -o ./server",
+    "test": "npm run build:server && node --test ./test/**/*.test.js"
   }
 }

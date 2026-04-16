@@ -450,6 +450,8 @@ public static class RazorFormatter
 
 internal static class MarkupFormatter
 {
+    private const int PreferredLineLength = 120;
+
     private static readonly HashSet<string> VoidElements = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
@@ -470,9 +472,9 @@ internal static class MarkupFormatter
         var indent = 0;
         var previousBlank = false;
 
-        foreach (var rawLine in lines)
+        for (var index = 0; index < lines.Count; index++)
         {
-            var trimmed = rawLine.Trim();
+            var trimmed = lines[index].Trim();
             if (trimmed.Length == 0)
             {
                 if (!previousBlank && formatted.Count > 0)
@@ -486,12 +488,19 @@ internal static class MarkupFormatter
 
             previousBlank = false;
 
+            if (TryCollapseEmptyElement(lines, index, out var collapsed, out var consumedIndex))
+            {
+                AddFormattedLine(formatted, FormatLine(collapsed, indent));
+                index = consumedIndex;
+                continue;
+            }
+
             if (ShouldDedent(trimmed))
             {
                 indent = Math.Max(0, indent - 1);
             }
 
-            formatted.Add(new string(' ', indent * 4) + trimmed);
+            AddFormattedLine(formatted, FormatLine(trimmed, indent));
 
             if (ShouldIndent(trimmed))
             {
@@ -500,6 +509,160 @@ internal static class MarkupFormatter
         }
 
         return string.Join("\n", formatted);
+    }
+
+    private static void AddFormattedLine(List<string> formatted, IEnumerable<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            formatted.Add(line);
+        }
+    }
+
+    private static IEnumerable<string> FormatLine(string line, int indent)
+    {
+        if (TryParseEmptyElementPair(line, out var emptyElement))
+        {
+            return FormatTag(emptyElement, indent);
+        }
+
+        if (TryParseStandaloneStartTag(line, out var tag))
+        {
+            return FormatTag(tag, indent);
+        }
+
+        return new[] { new string(' ', indent * 4) + line };
+    }
+
+    private static IEnumerable<string> FormatTag(HtmlTag tag, int indent)
+    {
+        var indentText = new string(' ', indent * 4);
+        var normalizedAttributes = tag.Attributes
+            .Select(FormatAttribute)
+            .Where(attribute => attribute.Length > 0)
+            .ToList();
+
+        var closingToken = tag.IsSelfClosing || VoidElements.Contains(tag.Name) ? " />" : ">";
+        var singleLine = normalizedAttributes.Count == 0
+            ? $"<{tag.Name}{closingToken}"
+            : $"<{tag.Name} {string.Join(" ", normalizedAttributes)}{closingToken}";
+
+        if (indentText.Length + singleLine.Length <= PreferredLineLength)
+        {
+            return new[] { indentText + singleLine };
+        }
+
+        var formatted = new List<string> { indentText + $"<{tag.Name}" };
+        var attributeIndent = indentText + "    ";
+        formatted.AddRange(normalizedAttributes.Select(attribute => attributeIndent + attribute));
+        formatted.Add(indentText + (tag.IsSelfClosing || VoidElements.Contains(tag.Name) ? "/>" : ">"));
+        return formatted;
+    }
+
+    private static string FormatAttribute(HtmlAttribute attribute)
+    {
+        if (attribute.Value == null)
+        {
+            return attribute.Name;
+        }
+
+        if (IsTrueBooleanAttribute(attribute.Value))
+        {
+            return attribute.Name;
+        }
+
+        if (TryNormalizeRazorExpression(attribute.Value, out var normalizedExpression))
+        {
+            return attribute.Name + "=" + normalizedExpression;
+        }
+
+        return attribute.Name + "=" + attribute.Value;
+    }
+
+    private static bool IsTrueBooleanAttribute(string value)
+    {
+        var unwrapped = UnwrapQuotes(value);
+        return string.Equals(unwrapped, "@true", StringComparison.Ordinal);
+    }
+
+    private static bool TryNormalizeRazorExpression(string value, out string normalized)
+    {
+        normalized = string.Empty;
+        var unwrapped = UnwrapQuotes(value);
+        if (!unwrapped.StartsWith("@", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        for (var index = 1; index < unwrapped.Length; index++)
+        {
+            var current = unwrapped[index];
+            if (!(char.IsLetterOrDigit(current)
+                  || current == '_'
+                  || current == '.'
+                  || current == '('
+                  || current == ')'
+                  || current == '['
+                  || current == ']'
+                  || current == '!'
+                  || current == '?'))
+            {
+                return false;
+            }
+        }
+
+        normalized = unwrapped;
+        return true;
+    }
+
+    private static string UnwrapQuotes(string value)
+    {
+        return value.Length >= 2
+            && ((value[0] == '"' && value[value.Length - 1] == '"') || (value[0] == '\'' && value[value.Length - 1] == '\''))
+            ? value.Substring(1, value.Length - 2)
+            : value;
+    }
+
+    private static bool TryCollapseEmptyElement(List<string> lines, int startIndex, out string collapsed, out int consumedIndex)
+    {
+        collapsed = string.Empty;
+        consumedIndex = startIndex;
+
+        var trimmed = lines[startIndex].Trim();
+        if (TryParseEmptyElementPair(trimmed, out var sameLineTag))
+        {
+            collapsed = BuildTagText(sameLineTag);
+            return true;
+        }
+
+        if (!TryParseStandaloneStartTag(trimmed, out var tag) || tag.IsSelfClosing || VoidElements.Contains(tag.Name))
+        {
+            return false;
+        }
+
+        var nextIndex = startIndex + 1;
+        while (nextIndex < lines.Count && string.IsNullOrWhiteSpace(lines[nextIndex]))
+        {
+            nextIndex++;
+        }
+
+        if (nextIndex >= lines.Count || !IsMatchingClosingTag(lines[nextIndex].Trim(), tag.Name))
+        {
+            return false;
+        }
+
+        tag = new HtmlTag(tag.Name, tag.Attributes, true);
+        collapsed = BuildTagText(tag);
+        consumedIndex = nextIndex;
+        return true;
+    }
+
+    private static string BuildTagText(HtmlTag tag)
+    {
+        var attributes = tag.Attributes.Select(FormatAttribute).Where(attribute => attribute.Length > 0).ToList();
+        return attributes.Count == 0
+            ? $"<{tag.Name} />"
+            : $"<{tag.Name} {string.Join(" ", attributes)} />";
     }
 
     private static void TrimBlankEdges(List<string> lines)
@@ -532,39 +695,233 @@ internal static class MarkupFormatter
             return true;
         }
 
-        if (!line.StartsWith("<", StringComparison.Ordinal) || line.StartsWith("</", StringComparison.Ordinal) || line.Contains("</"))
-        {
-            return false;
-        }
-
-        if (line.StartsWith("<!--", StringComparison.Ordinal) || line.StartsWith("<!", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        if (line.EndsWith("/>", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var tagName = GetTagName(line);
-        return tagName != null && !VoidElements.Contains(tagName);
+        return TryParseStandaloneStartTag(line, out var tag)
+            && !tag.IsSelfClosing
+            && !VoidElements.Contains(tag.Name);
     }
 
-    private static string? GetTagName(string line)
+    private static bool IsMatchingClosingTag(string line, string tagName)
     {
-        var start = line.IndexOf('<') + 1;
-        if (start <= 0 || start >= line.Length)
+        return string.Equals(line, $"</{tagName}>", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryParseEmptyElementPair(string line, out HtmlTag tag)
+    {
+        tag = default;
+        var tagEnd = FindTagEnd(line);
+        if (tagEnd < 0)
         {
-            return null;
+            return false;
         }
 
-        var end = start;
-        while (end < line.Length && !char.IsWhiteSpace(line[end]) && line[end] != '>' && line[end] != '/')
+        var openingTagText = line.Substring(0, tagEnd + 1);
+        if (!TryParseStandaloneStartTag(openingTagText, out tag) || tag.IsSelfClosing)
         {
-            end++;
+            return false;
         }
 
-        return end > start ? line.Substring(start, end - start) : null;
+        var remaining = line.Substring(tagEnd + 1).Trim();
+        if (!IsMatchingClosingTag(remaining, tag.Name))
+        {
+            return false;
+        }
+
+        tag = new HtmlTag(tag.Name, tag.Attributes, true);
+        return true;
+    }
+
+    private static bool TryParseStandaloneStartTag(string line, out HtmlTag tag)
+    {
+        tag = default;
+        if (string.IsNullOrWhiteSpace(line)
+            || !line.StartsWith("<", StringComparison.Ordinal)
+            || line.StartsWith("</", StringComparison.Ordinal)
+            || line.StartsWith("<!--", StringComparison.Ordinal)
+            || line.StartsWith("<!", StringComparison.Ordinal)
+            || line.StartsWith("<?", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var tagEnd = FindTagEnd(line);
+        if (tagEnd != line.Length - 1)
+        {
+            return false;
+        }
+
+        var content = line.Substring(1, line.Length - 2).Trim();
+        var isSelfClosing = false;
+        if (content.EndsWith("/", StringComparison.Ordinal))
+        {
+            isSelfClosing = true;
+            content = content.Substring(0, content.Length - 1).TrimEnd();
+        }
+
+        if (content.Length == 0)
+        {
+            return false;
+        }
+
+        var separatorIndex = FindNameSeparator(content);
+        var name = separatorIndex < 0 ? content : content.Substring(0, separatorIndex);
+        if (name.Length == 0)
+        {
+            return false;
+        }
+
+        var attributes = separatorIndex < 0
+            ? new List<HtmlAttribute>()
+            : ParseAttributes(content.Substring(separatorIndex));
+
+        tag = new HtmlTag(name, attributes, isSelfClosing);
+        return true;
+    }
+
+    private static int FindTagEnd(string line)
+    {
+        var quote = '\0';
+        for (var index = 0; index < line.Length; index++)
+        {
+            var current = line[index];
+            if (quote != '\0')
+            {
+                if (current == quote)
+                {
+                    quote = '\0';
+                }
+
+                continue;
+            }
+
+            if (current == '"' || current == '\'')
+            {
+                quote = current;
+                continue;
+            }
+
+            if (current == '>')
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int FindNameSeparator(string content)
+    {
+        for (var index = 0; index < content.Length; index++)
+        {
+            if (char.IsWhiteSpace(content[index]))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static List<HtmlAttribute> ParseAttributes(string content)
+    {
+        var attributes = new List<HtmlAttribute>();
+        var index = 0;
+
+        while (index < content.Length)
+        {
+            while (index < content.Length && char.IsWhiteSpace(content[index]))
+            {
+                index++;
+            }
+
+            if (index >= content.Length)
+            {
+                break;
+            }
+
+            var nameStart = index;
+            while (index < content.Length && !char.IsWhiteSpace(content[index]) && content[index] != '=')
+            {
+                index++;
+            }
+
+            var name = content.Substring(nameStart, index - nameStart);
+            while (index < content.Length && char.IsWhiteSpace(content[index]))
+            {
+                index++;
+            }
+
+            string? value = null;
+            if (index < content.Length && content[index] == '=')
+            {
+                index++;
+                while (index < content.Length && char.IsWhiteSpace(content[index]))
+                {
+                    index++;
+                }
+
+                if (index < content.Length && (content[index] == '"' || content[index] == '\''))
+                {
+                    var quote = content[index++];
+                    var valueStart = index - 1;
+                    while (index < content.Length && content[index] != quote)
+                    {
+                        index++;
+                    }
+
+                    if (index < content.Length)
+                    {
+                        index++;
+                    }
+
+                    value = content.Substring(valueStart, index - valueStart);
+                }
+                else
+                {
+                    var valueStart = index;
+                    while (index < content.Length && !char.IsWhiteSpace(content[index]))
+                    {
+                        index++;
+                    }
+
+                    value = content.Substring(valueStart, index - valueStart);
+                }
+            }
+
+            if (name.Length > 0)
+            {
+                attributes.Add(new HtmlAttribute(name, value));
+            }
+        }
+
+        return attributes;
+    }
+
+    private readonly struct HtmlTag
+    {
+        public HtmlTag(string name, List<HtmlAttribute> attributes, bool isSelfClosing)
+        {
+            Name = name;
+            Attributes = attributes;
+            IsSelfClosing = isSelfClosing;
+        }
+
+        public string Name { get; }
+
+        public List<HtmlAttribute> Attributes { get; }
+
+        public bool IsSelfClosing { get; }
+    }
+
+    private readonly struct HtmlAttribute
+    {
+        public HtmlAttribute(string name, string? value)
+        {
+            Name = name;
+            Value = value;
+        }
+
+        public string Name { get; }
+
+        public string? Value { get; }
     }
 }

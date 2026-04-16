@@ -6,6 +6,8 @@ var repoRoot = FindRepoRoot();
 
 ShouldFormatTopLevelSections(failures);
 ShouldIndentMarkupBlocks(failures);
+ShouldFormatTagAttributes(failures);
+ShouldCollapseEmptyElements(failures);
 await ShouldSupportCliStandardInputAsync(repoRoot, failures);
 await ShouldFormatFixtureThroughMsBuildTargetAsync(repoRoot, failures);
 
@@ -92,6 +94,45 @@ static void ShouldIndentMarkupBlocks(List<string> failures)
         """;
 
     AssertEqual("ShouldIndentMarkupBlocks", expected + "\n", RazorFormatter.Format(input), failures);
+}
+
+static void ShouldFormatTagAttributes(List<string> failures)
+{
+    const string input =
+        """
+        <MyComponent Foo="@true" Value="@Model.Value" Title="This is a deliberately long attribute value that should cause the formatter to wrap attributes onto separate lines for readability"></MyComponent>
+        """;
+
+    const string expected =
+        """
+        <MyComponent
+            Foo
+            Value=@Model.Value
+            Title="This is a deliberately long attribute value that should cause the formatter to wrap attributes onto separate lines for readability"
+        />
+        """;
+
+    AssertEqual("ShouldFormatTagAttributes", expected + "\n", RazorFormatter.Format(input), failures);
+}
+
+static void ShouldCollapseEmptyElements(List<string> failures)
+{
+    const string input =
+        """
+        <InputText Value="@Value"></InputText>
+
+        <AnotherComponent>
+        </AnotherComponent>
+        """;
+
+    const string expected =
+        """
+        <InputText Value=@Value />
+
+        <AnotherComponent />
+        """;
+
+    AssertEqual("ShouldCollapseEmptyElements", expected + "\n", RazorFormatter.Format(input), failures);
 }
 
 static async Task ShouldSupportCliStandardInputAsync(string repoRoot, List<string> failures)
