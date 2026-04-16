@@ -118,11 +118,16 @@ static async Task ShouldSupportCliStandardInputAsync(List<string> failures)
 
 static async Task ShouldFormatFixtureThroughMsBuildTargetAsync(List<string> failures)
 {
+    const string repoRoot = "/home/runner/work/razorpier/razorpier";
     var fixtureSource = "/home/runner/work/razorpier/razorpier/tests/fixtures/MsBuildSample";
     var tempRoot = Path.Combine(Path.GetTempPath(), "razorpier-msbuild-" + Guid.NewGuid().ToString("N"));
     CopyDirectory(fixtureSource, tempRoot);
+    var projectPath = Path.Combine(tempRoot, "MsBuildSample.csproj");
+    var projectText = await File.ReadAllTextAsync(projectPath);
+    projectText = projectText.Replace("__REPO_ROOT__", repoRoot, StringComparison.Ordinal);
+    await File.WriteAllTextAsync(projectPath, projectText);
 
-    var result = await RunProcessAsync("dotnet", $"build {Path.Combine(tempRoot, "MsBuildSample.csproj")}");
+    var result = await RunProcessAsync("dotnet", $"build {projectPath}");
     var componentPath = Path.Combine(tempRoot, "Component.razor");
     var content = await File.ReadAllTextAsync(componentPath);
 
