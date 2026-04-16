@@ -17,7 +17,7 @@ Razor ファイル内のトップレベル要素を、以下の順で自動ソ�
 1. `@using`
 2. `@page`
 3. `@attributes`
-4. Razor markup（`razor-contents` / markup / directive などの本文）
+4. Razor markup（要件上の `razor-contents`。markup / directive などの本文）
 5. `@inject`
 6. `@code`（Razor code）
 
