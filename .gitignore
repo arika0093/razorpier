@@ -1,0 +1,4 @@
+**/bin/
+**/obj/
+src/Razorpier.VSCode/server/
+src/Razorpier.VisualStudio/Generated/

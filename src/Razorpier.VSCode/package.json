@@ -1,0 +1,31 @@
+{
+  "name": "razorpier-vscode",
+  "displayName": "Razorpier",
+  "description": "VS Code integration for formatting Razor files with Razorpier.",
+  "version": "0.0.1",
+  "publisher": "arika0093",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:razor",
+    "onLanguage:aspnetcorerazor",
+    "onCommand:razorpier.formatDocument"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "razorpier.formatDocument",
+        "title": "Razorpier: Format Razor Document"
+      }
+    ]
+  },
+  "scripts": {
+    "build:server": "dotnet publish ../Razorpier.Tool/Razorpier.Tool.csproj -c Debug -p:UseAppHost=false -o ./server",
+    "test": "npm run build:server && node --test ./test/**/*.test.js"
+  }
+}

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RazorpierFormatOnBuild>true</RazorpierFormatOnBuild>
+    <RazorpierMSBuildAssembly>__REPO_ROOT__/src/Razorpier.MSBuild/bin/Debug/netstandard2.0/Razorpier.MSBuild.dll</RazorpierMSBuildAssembly>
+  </PropertyGroup>
+
+  <Import Project="__REPO_ROOT__/src/Razorpier.MSBuild/buildTransitive/Razorpier.MSBuild.targets" />
+</Project>

@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <RazorpierFormatOnBuild Condition="'$(RazorpierFormatOnBuild)' == ''">false</RazorpierFormatOnBuild>
+    <RazorpierMSBuildAssembly Condition="'$(RazorpierMSBuildAssembly)' == ''">$(MSBuildThisFileDirectory)..\lib\netstandard2.0\Razorpier.MSBuild.dll</RazorpierMSBuildAssembly>
+  </PropertyGroup>
+
+  <UsingTask TaskName="RazorpierFormatTask" AssemblyFile="$(RazorpierMSBuildAssembly)" />
+
+  <Target Name="RazorpierFormat" BeforeTargets="CoreCompile" Condition="'$(RazorpierFormatOnBuild)' == 'true'">
+    <ItemGroup>
+      <RazorpierRazorFiles Include="$(MSBuildProjectDirectory)/**/*.razor" Exclude="$(MSBuildProjectDirectory)/**/bin/**;$(MSBuildProjectDirectory)/**/obj/**" />
+    </ItemGroup>
+
+    <RazorpierFormatTask Files="@(RazorpierRazorFiles)" />
+  </Target>
+</Project>
