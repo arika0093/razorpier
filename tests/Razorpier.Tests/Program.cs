@@ -2,11 +2,12 @@ using System.Diagnostics;
 using Razorpier.Core;
 
 var failures = new List<string>();
+var repoRoot = FindRepoRoot();
 
 ShouldFormatTopLevelSections(failures);
 ShouldIndentMarkupBlocks(failures);
-await ShouldSupportCliStandardInputAsync(failures);
-await ShouldFormatFixtureThroughMsBuildTargetAsync(failures);
+await ShouldSupportCliStandardInputAsync(repoRoot, failures);
+await ShouldFormatFixtureThroughMsBuildTargetAsync(repoRoot, failures);
 
 if (failures.Count == 0)
 {
@@ -93,7 +94,7 @@ static void ShouldIndentMarkupBlocks(List<string> failures)
     AssertEqual("ShouldIndentMarkupBlocks", expected + "\n", RazorFormatter.Format(input), failures);
 }
 
-static async Task ShouldSupportCliStandardInputAsync(List<string> failures)
+static async Task ShouldSupportCliStandardInputAsync(string repoRoot, List<string> failures)
 {
     const string input =
         """
@@ -107,7 +108,7 @@ static async Task ShouldSupportCliStandardInputAsync(List<string> failures)
 
     var result = await RunProcessAsync(
         "dotnet",
-        "run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- --stdin",
+        $"run --project {Path.Combine(repoRoot, "src", "Razorpier.Tool", "Razorpier.Tool.csproj")} -- --stdin",
         input);
 
     if (result.ExitCode != 0 || !result.StdOut.Contains("@using Zebra", StringComparison.Ordinal) || !result.StdOut.Contains("    <p>Hello</p>", StringComparison.Ordinal))
@@ -116,10 +117,9 @@ static async Task ShouldSupportCliStandardInputAsync(List<string> failures)
     }
 }
 
-static async Task ShouldFormatFixtureThroughMsBuildTargetAsync(List<string> failures)
+static async Task ShouldFormatFixtureThroughMsBuildTargetAsync(string repoRoot, List<string> failures)
 {
-    const string repoRoot = "/home/runner/work/razorpier/razorpier";
-    var fixtureSource = "/home/runner/work/razorpier/razorpier/tests/fixtures/MsBuildSample";
+    var fixtureSource = Path.Combine(repoRoot, "tests", "fixtures", "MsBuildSample");
     var tempRoot = Path.Combine(Path.GetTempPath(), "razorpier-msbuild-" + Guid.NewGuid().ToString("N"));
     CopyDirectory(fixtureSource, tempRoot);
     var projectPath = Path.Combine(tempRoot, "MsBuildSample.csproj");
@@ -171,7 +171,7 @@ static void CopyDirectory(string sourceDir, string destinationDir)
     }
 }
 
-static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, string? standardInput = null)
+static async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(string fileName, string arguments, string? standardInput = null)
 {
     var startInfo = new ProcessStartInfo(fileName, arguments)
     {
@@ -192,7 +192,21 @@ static async Task<ProcessResult> RunProcessAsync(string fileName, string argumen
     var stderrTask = process.StandardError.ReadToEndAsync();
     await process.WaitForExitAsync();
 
-    return new ProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
+    return (process.ExitCode, await stdoutTask, await stderrTask);
 }
 
-internal sealed record ProcessResult(int ExitCode, string StdOut, string StdErr);
+static string FindRepoRoot()
+{
+    var directory = new DirectoryInfo(AppContext.BaseDirectory);
+    while (directory != null)
+    {
+        if (File.Exists(Path.Combine(directory.FullName, "Razorpier.sln")))
+        {
+            return directory.FullName;
+        }
+
+        directory = directory.Parent;
+    }
+
+    throw new InvalidOperationException("Could not locate the repository root.");
+}

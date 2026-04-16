@@ -49,9 +49,9 @@ var formatted = RazorFormatter.Format(source);
 ### dotnet tool
 
 ```bash
-dotnet run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- path/to/Component.razor
-dotnet run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- --check path/to/Component.razor
-dotnet run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- --stdin < path/to/Component.razor
+dotnet run --project src/Razorpier.Tool/Razorpier.Tool.csproj -- path/to/Component.razor
+dotnet run --project src/Razorpier.Tool/Razorpier.Tool.csproj -- --check path/to/Component.razor
+dotnet run --project src/Razorpier.Tool/Razorpier.Tool.csproj -- --stdin < path/to/Component.razor
 ```
 
 ### MSBuild 連携
@@ -67,7 +67,7 @@ dotnet run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Ra
 ### VS Code 拡張
 
 ```bash
-cd /home/runner/work/razorpier/razorpier/src/Razorpier.VSCode
+cd src/Razorpier.VSCode
 npm run build:server
 ```
 
@@ -77,7 +77,7 @@ npm run build:server
 ### Visual Studio 拡張
 
 ```bash
-dotnet build /home/runner/work/razorpier/razorpier/src/Razorpier.VisualStudio/Razorpier.VisualStudio.csproj
+dotnet build src/Razorpier.VisualStudio/Razorpier.VisualStudio.csproj
 ```
 
 - Tools メニューに `Format Razor Document` コマンドを追加します。
@@ -86,7 +86,7 @@ dotnet build /home/runner/work/razorpier/razorpier/src/Razorpier.VisualStudio/Ra
 ## テスト
 
 ```bash
-dotnet build /home/runner/work/razorpier/razorpier/Razorpier.sln
-dotnet run --project /home/runner/work/razorpier/razorpier/tests/Razorpier.Tests/Razorpier.Tests.csproj
-cd /home/runner/work/razorpier/razorpier/src/Razorpier.VSCode && npm test
+dotnet build Razorpier.sln
+dotnet run --project tests/Razorpier.Tests/Razorpier.Tests.csproj
+cd src/Razorpier.VSCode && npm test
 ```
