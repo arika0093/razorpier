@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidRazorpierPackage">
+    <Groups>
+      <Group guid="guidRazorpierCommandSet" id="RazorpierGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="guidRazorpierCommandSet" id="FormatRazorDocumentCommandId" priority="0x0100" type="Button">
+        <Parent guid="guidRazorpierCommandSet" id="RazorpierGroup" />
+        <Strings>
+          <ButtonText>Format Razor Document</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <Symbols>
+    <GuidSymbol name="guidRazorpierPackage" value="{a1456d82-48ca-4b38-b83d-b214165f6910}" />
+    <GuidSymbol name="guidRazorpierCommandSet" value="{d3fa0cb8-fc5b-4ee6-9ef1-c7137f7ba1f4}">
+      <IDSymbol name="RazorpierGroup" value="0x1020" />
+      <IDSymbol name="FormatRazorDocumentCommandId" value="0x0100" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

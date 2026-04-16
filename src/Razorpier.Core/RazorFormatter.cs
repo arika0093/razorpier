@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using CSharpier.Core;
 using CSharpier.Core.CSharp;
@@ -6,7 +9,7 @@ namespace Razorpier.Core;
 
 public static class RazorFormatter
 {
-    private static readonly CodeFormatterOptions CSharpierOptions = new()
+    private static readonly CodeFormatterOptions CSharpierOptions = new CodeFormatterOptions
     {
         EndOfLine = EndOfLine.LF,
         IndentStyle = IndentStyle.Spaces,
@@ -15,15 +18,15 @@ public static class RazorFormatter
 
     public static string Format(string source)
     {
-        var normalized = NormalizeNewLines(source);
+        var normalized = NormalizeNewLines(source ?? string.Empty);
         var sections = ParseSections(normalized);
         var orderedSections = sections
             .Select((section, index) => new OrderedSection(section, index))
-            .OrderBy(static item => item.Section.Kind)
-            .ThenBy(static item => item.Section.Kind is RazorSectionKind.Markup or RazorSectionKind.Code ? item.Index : int.MinValue)
-            .ThenBy(static item => item.Section.Kind is RazorSectionKind.Markup or RazorSectionKind.Code ? string.Empty : item.Section.Content, StringComparer.OrdinalIgnoreCase)
-            .Select(static item => FormatSection(item.Section))
-            .Where(static section => !string.IsNullOrWhiteSpace(section))
+            .OrderBy(item => item.Section.Kind)
+            .ThenBy(item => item.Section.Kind == RazorSectionKind.Markup || item.Section.Kind == RazorSectionKind.Code ? item.Index : int.MinValue)
+            .ThenBy(item => item.Section.Kind == RazorSectionKind.Markup || item.Section.Kind == RazorSectionKind.Code ? string.Empty : item.Section.Content, StringComparer.OrdinalIgnoreCase)
+            .Select(item => FormatSection(item.Section))
+            .Where(section => !string.IsNullOrWhiteSpace(section))
             .ToArray();
 
         return orderedSections.Length == 0
@@ -31,13 +34,18 @@ public static class RazorFormatter
             : string.Join("\n\n", orderedSections) + "\n";
     }
 
-    private static string FormatSection(RazorSection section) =>
-        section.Kind switch
+    private static string FormatSection(RazorSection section)
+    {
+        switch (section.Kind)
         {
-            RazorSectionKind.Markup => MarkupFormatter.Format(section.Content),
-            RazorSectionKind.Code => FormatCodeBlock(section.Content),
-            _ => section.Content.Trim(),
-        };
+            case RazorSectionKind.Markup:
+                return MarkupFormatter.Format(section.Content);
+            case RazorSectionKind.Code:
+                return FormatCodeBlock(section.Content);
+            default:
+                return section.Content.Trim();
+        }
+    }
 
     private static List<RazorSection> ParseSections(string source)
     {
@@ -57,7 +65,9 @@ public static class RazorFormatter
                 continue;
             }
 
-            if (TryReadCodeBlock(lines, index, out var codeBlock, out var nextIndex))
+            string codeBlock;
+            int nextIndex;
+            if (TryReadCodeBlock(lines, index, out codeBlock, out nextIndex))
             {
                 FlushMarkup(markup, sections);
                 sections.Add(new RazorSection(RazorSectionKind.Code, codeBlock));
@@ -65,7 +75,8 @@ public static class RazorFormatter
                 continue;
             }
 
-            if (TryGetDirectiveKind(trimmed, out var kind))
+            RazorSectionKind kind;
+            if (TryGetDirectiveKind(trimmed, out kind))
             {
                 FlushMarkup(markup, sections);
                 sections.Add(new RazorSection(kind, trimmed));
@@ -125,7 +136,7 @@ public static class RazorFormatter
 
     private static void FlushMarkup(List<string> markup, List<RazorSection> sections)
     {
-        var content = string.Join('\n', markup).Trim();
+        var content = string.Join("\n", markup).Trim();
         if (content.Length > 0)
         {
             sections.Add(new RazorSection(RazorSectionKind.Markup, content));
@@ -161,7 +172,7 @@ public static class RazorFormatter
             return true;
         }
 
-        kind = default;
+        kind = RazorSectionKind.Using;
         return false;
     }
 
@@ -176,7 +187,7 @@ public static class RazorFormatter
             return normalized.Trim();
         }
 
-        var body = normalized[(openBraceIndex + 1)..closeBraceIndex].Trim('\n', '\r', ' ', '\t');
+        var body = normalized.Substring(openBraceIndex + 1, closeBraceIndex - openBraceIndex - 1).Trim('\n', '\r', ' ', '\t');
         var wrapped = WrapCodeBody(body);
         var result = CSharpFormatter.Format(wrapped, CSharpierOptions);
         var formattedBody = result.CompilationErrors.Any()
@@ -197,9 +208,9 @@ public static class RazorFormatter
             "\n",
             NormalizeNewLines(body)
                 .Split('\n')
-                .Select(static line => line.Length == 0 ? string.Empty : $"    {line.TrimEnd()}"));
+                .Select(line => line.Length == 0 ? string.Empty : "    " + line.TrimEnd()));
 
-        return $"internal sealed class __RazorpierHost\n{{\n{indentedBody}\n}}\n";
+        return "internal sealed class __RazorpierHost\n{\n" + indentedBody + "\n}\n";
     }
 
     private static string ExtractFormattedBody(string formattedWrapper)
@@ -212,7 +223,7 @@ public static class RazorFormatter
             return string.Empty;
         }
 
-        var body = normalized[(openBraceIndex + 1)..closeBraceIndex].Trim('\n');
+        var body = normalized.Substring(openBraceIndex + 1, closeBraceIndex - openBraceIndex - 1).Trim('\n');
         return RemoveCommonIndent(body);
     }
 
@@ -227,9 +238,9 @@ public static class RazorFormatter
             "\n",
             NormalizeNewLines(body)
                 .Split('\n')
-                .Select(static line => line.Length == 0 ? string.Empty : $"    {line}"));
+                .Select(line => line.Length == 0 ? string.Empty : "    " + line));
 
-        return $"@code\n{{\n{formattedBody}\n}}";
+        return "@code\n{\n" + formattedBody + "\n}";
     }
 
     private static int FindFirstBrace(string text)
@@ -237,9 +248,10 @@ public static class RazorFormatter
         var scanner = new BraceScanner();
         for (var index = 0; index < text.Length; index++)
         {
-            if (scanner.Process(text[index], index) is { } match)
+            var match = scanner.Process(text[index], index, text);
+            if (match.HasValue)
             {
-                return match;
+                return match.Value;
             }
         }
 
@@ -256,9 +268,10 @@ public static class RazorFormatter
         var scanner = new BraceScanner();
         for (var index = openBraceIndex; index < text.Length; index++)
         {
-            if (scanner.Process(text[index], index) is { } match && scanner.Depth == 0)
+            var match = scanner.Process(text[index], index, text);
+            if (match.HasValue && scanner.Depth == 0)
             {
-                return match;
+                return match.Value;
             }
         }
 
@@ -269,22 +282,46 @@ public static class RazorFormatter
     {
         var lines = NormalizeNewLines(text).Split('\n');
         var indent = lines
-            .Where(static line => line.Trim().Length > 0)
-            .Select(static line => line.TakeWhile(static c => c == ' ' || c == '\t').Count())
+            .Where(line => line.Trim().Length > 0)
+            .Select(line => line.TakeWhile(c => c == ' ' || c == '\t').Count())
             .DefaultIfEmpty(0)
             .Min();
 
         return string.Join(
             "\n",
-            lines.Select(line => line.Length >= indent ? line[indent..] : line)).Trim('\n');
+            lines.Select(line => line.Length >= indent ? line.Substring(indent) : line)).Trim('\n');
     }
 
-    private static string NormalizeNewLines(string value) =>
-        value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+    private static string NormalizeNewLines(string value)
+    {
+        return value.Replace("\r\n", "\n").Replace('\r', '\n');
+    }
 
-    private readonly record struct OrderedSection(RazorSection Section, int Index);
+    private sealed class OrderedSection
+    {
+        public OrderedSection(RazorSection section, int index)
+        {
+            Section = section;
+            Index = index;
+        }
 
-    private readonly record struct RazorSection(RazorSectionKind Kind, string Content);
+        public RazorSection Section { get; }
+
+        public int Index { get; }
+    }
+
+    private sealed class RazorSection
+    {
+        public RazorSection(RazorSectionKind kind, string content)
+        {
+            Kind = kind;
+            Content = content;
+        }
+
+        public RazorSectionKind Kind { get; }
+
+        public string Content { get; }
+    }
 
     private enum RazorSectionKind
     {
@@ -318,9 +355,12 @@ public static class RazorFormatter
             inSingleLineComment = false;
         }
 
-        public int? Process(char current, int index, string? line = null)
+        public int? Process(char current, int index, string line)
         {
-            line ??= string.Empty;
+            if (line == null)
+            {
+                line = string.Empty;
+            }
 
             if (inSingleLineComment)
             {
@@ -401,13 +441,16 @@ public static class RazorFormatter
             return null;
         }
 
-        private static char Peek(string text, int index) => index < text.Length ? text[index] : '\0';
+        private static char Peek(string text, int index)
+        {
+            return index < text.Length ? text[index] : '\0';
+        }
     }
 }
 
 internal static class MarkupFormatter
 {
-    private static readonly HashSet<string> VoidElements = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> VoidElements = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
     };
@@ -415,10 +458,10 @@ internal static class MarkupFormatter
     public static string Format(string markup)
     {
         var lines = markup
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r\n", "\n")
             .Replace('\r', '\n')
             .Split('\n')
-            .Select(static line => line.TrimEnd())
+            .Select(line => line.TrimEnd())
             .ToList();
 
         TrimBlankEdges(lines);
@@ -448,7 +491,7 @@ internal static class MarkupFormatter
                 indent = Math.Max(0, indent - 1);
             }
 
-            formatted.Add($"{new string(' ', indent * 4)}{trimmed}");
+            formatted.Add(new string(' ', indent * 4) + trimmed);
 
             if (ShouldIndent(trimmed))
             {
@@ -466,19 +509,21 @@ internal static class MarkupFormatter
             lines.RemoveAt(0);
         }
 
-        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1]))
+        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[lines.Count - 1]))
         {
             lines.RemoveAt(lines.Count - 1);
         }
     }
 
-    private static bool ShouldDedent(string line) =>
-        line.StartsWith("</", StringComparison.Ordinal)
-        || line == "}"
-        || line.StartsWith("} ", StringComparison.Ordinal)
-        || line.StartsWith("@else", StringComparison.Ordinal)
-        || line.StartsWith("@catch", StringComparison.Ordinal)
-        || line.StartsWith("@finally", StringComparison.Ordinal);
+    private static bool ShouldDedent(string line)
+    {
+        return line.StartsWith("</", StringComparison.Ordinal)
+            || line == "}"
+            || line.StartsWith("} ", StringComparison.Ordinal)
+            || line.StartsWith("@else", StringComparison.Ordinal)
+            || line.StartsWith("@catch", StringComparison.Ordinal)
+            || line.StartsWith("@finally", StringComparison.Ordinal);
+    }
 
     private static bool ShouldIndent(string line)
     {
@@ -487,7 +532,7 @@ internal static class MarkupFormatter
             return true;
         }
 
-        if (!line.StartsWith('<') || line.StartsWith("</", StringComparison.Ordinal) || line.Contains("</", StringComparison.Ordinal))
+        if (!line.StartsWith("<", StringComparison.Ordinal) || line.StartsWith("</", StringComparison.Ordinal) || line.Contains("</"))
         {
             return false;
         }
@@ -503,7 +548,7 @@ internal static class MarkupFormatter
         }
 
         var tagName = GetTagName(line);
-        return tagName is not null && !VoidElements.Contains(tagName);
+        return tagName != null && !VoidElements.Contains(tagName);
     }
 
     private static string? GetTagName(string line)
@@ -520,6 +565,6 @@ internal static class MarkupFormatter
             end++;
         }
 
-        return end > start ? line[start..end] : null;
+        return end > start ? line.Substring(start, end - start) : null;
     }
 }

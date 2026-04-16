@@ -28,20 +28,13 @@ Razor ファイル内のトップレベル要素を、以下の順で自動ソ�
 - `@code` 内部
   - `CSharpier` API を呼び出して C# を整形
 
-## 現状の実装
+## 実装済みパッケージ
 
-- API パッケージ（`Razorpier.Core`）
-- dotnet tool（`Razorpier.Tool`）
-
-## 目標提供形態
-
-`CSharpier` 周辺エコシステムに準じて、以下の利用形態を提供します。
-
-- Visual Studio 拡張
-- VS Code 拡張
-- dotnet tool
-- MSBuild 連携
-- API パッケージ
+- API パッケージ（`src/Razorpier.Core`）
+- dotnet tool（`src/Razorpier.Tool`）
+- MSBuild 連携（`src/Razorpier.MSBuild`）
+- VS Code 拡張（`src/Razorpier.VSCode`）
+- Visual Studio 拡張（`src/Razorpier.VisualStudio`）
 
 ## 使い方
 
@@ -56,13 +49,44 @@ var formatted = RazorFormatter.Format(source);
 ### dotnet tool
 
 ```bash
-dotnet run --project src/Razorpier.Tool/Razorpier.Tool.csproj -- path/to/Component.razor
-dotnet run --project src/Razorpier.Tool/Razorpier.Tool.csproj -- --check path/to/Component.razor
+dotnet run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- path/to/Component.razor
+dotnet run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- --check path/to/Component.razor
+dotnet run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- --stdin < path/to/Component.razor
 ```
 
-### テスト
+### MSBuild 連携
+
+`Razorpier.MSBuild` パッケージを参照し、ビルド時整形を有効にします。
+
+```xml
+<PropertyGroup>
+  <RazorpierFormatOnBuild>true</RazorpierFormatOnBuild>
+</PropertyGroup>
+```
+
+### VS Code 拡張
 
 ```bash
-dotnet build Razorpier.sln
-dotnet run --project tests/Razorpier.Tests/Razorpier.Tests.csproj
+cd /home/runner/work/razorpier/razorpier/src/Razorpier.VSCode
+npm run build:server
+```
+
+- Razor ドキュメントフォーマッタを提供します。
+- コマンド `Razorpier: Format Razor Document` を追加します。
+
+### Visual Studio 拡張
+
+```bash
+dotnet build /home/runner/work/razorpier/razorpier/src/Razorpier.VisualStudio/Razorpier.VisualStudio.csproj
+```
+
+- Tools メニューに `Format Razor Document` コマンドを追加します。
+- アクティブな `.razor` ドキュメントに対して整形を実行します。
+
+## テスト
+
+```bash
+dotnet build /home/runner/work/razorpier/razorpier/Razorpier.sln
+dotnet run --project /home/runner/work/razorpier/razorpier/tests/Razorpier.Tests/Razorpier.Tests.csproj
+cd /home/runner/work/razorpier/razorpier/src/Razorpier.VSCode && npm test
 ```

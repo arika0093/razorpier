@@ -5,9 +5,19 @@ if (args.Length == 0 || args.Any(static arg => arg is "-h" or "--help"))
     Console.WriteLine(
         """
         razorpier <file1.razor> [file2.razor ...] [--check]
+        razorpier --stdin
 
           --check   Verify formatting without writing files.
+          --stdin   Read Razor content from standard input and write formatted output to standard output.
         """);
+    return 0;
+}
+
+if (args.Contains("--stdin", StringComparer.Ordinal))
+{
+    var input = await Console.In.ReadToEndAsync();
+    var formatted = RazorFormatter.Format(input);
+    await Console.Out.WriteAsync(formatted);
     return 0;
 }
 

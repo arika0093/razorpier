@@ -1,9 +1,12 @@
+using System.Diagnostics;
 using Razorpier.Core;
 
 var failures = new List<string>();
 
 ShouldFormatTopLevelSections(failures);
 ShouldIndentMarkupBlocks(failures);
+await ShouldSupportCliStandardInputAsync(failures);
+await ShouldFormatFixtureThroughMsBuildTargetAsync(failures);
 
 if (failures.Count == 0)
 {
@@ -90,6 +93,45 @@ static void ShouldIndentMarkupBlocks(List<string> failures)
     AssertEqual("ShouldIndentMarkupBlocks", expected + "\n", RazorFormatter.Format(input), failures);
 }
 
+static async Task ShouldSupportCliStandardInputAsync(List<string> failures)
+{
+    const string input =
+        """
+        @inject WeatherForecastService Service
+        <div>
+        <p>Hello</p>
+        </div>
+        @using Zebra
+        @page "/counter"
+        """;
+
+    var result = await RunProcessAsync(
+        "dotnet",
+        "run --project /home/runner/work/razorpier/razorpier/src/Razorpier.Tool/Razorpier.Tool.csproj -- --stdin",
+        input);
+
+    if (result.ExitCode != 0 || !result.StdOut.Contains("@using Zebra", StringComparison.Ordinal) || !result.StdOut.Contains("    <p>Hello</p>", StringComparison.Ordinal))
+    {
+        failures.Add($"[FAIL] ShouldSupportCliStandardInputAsync\nExit: {result.ExitCode}\nStdOut:\n{result.StdOut}\nStdErr:\n{result.StdErr}");
+    }
+}
+
+static async Task ShouldFormatFixtureThroughMsBuildTargetAsync(List<string> failures)
+{
+    var fixtureSource = "/home/runner/work/razorpier/razorpier/tests/fixtures/MsBuildSample";
+    var tempRoot = Path.Combine(Path.GetTempPath(), "razorpier-msbuild-" + Guid.NewGuid().ToString("N"));
+    CopyDirectory(fixtureSource, tempRoot);
+
+    var result = await RunProcessAsync("dotnet", $"build {Path.Combine(tempRoot, "MsBuildSample.csproj")}");
+    var componentPath = Path.Combine(tempRoot, "Component.razor");
+    var content = await File.ReadAllTextAsync(componentPath);
+
+    if (result.ExitCode != 0 || !content.Contains("    <p>Hello</p>", StringComparison.Ordinal) || !content.StartsWith("@using Zebra", StringComparison.Ordinal))
+    {
+        failures.Add($"[FAIL] ShouldFormatFixtureThroughMsBuildTargetAsync\nExit: {result.ExitCode}\nStdOut:\n{result.StdOut}\nStdErr:\n{result.StdErr}\nFormatted:\n{content}");
+    }
+}
+
 static void AssertEqual(string name, string expected, string actual, List<string> failures)
 {
     if (!string.Equals(expected, actual, StringComparison.Ordinal))
@@ -108,3 +150,44 @@ static void AssertEqual(string name, string expected, string actual, List<string
             """);
     }
 }
+
+static void CopyDirectory(string sourceDir, string destinationDir)
+{
+    Directory.CreateDirectory(destinationDir);
+
+    foreach (var file in Directory.GetFiles(sourceDir))
+    {
+        File.Copy(file, Path.Combine(destinationDir, Path.GetFileName(file)), overwrite: true);
+    }
+
+    foreach (var directory in Directory.GetDirectories(sourceDir))
+    {
+        CopyDirectory(directory, Path.Combine(destinationDir, Path.GetFileName(directory)));
+    }
+}
+
+static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, string? standardInput = null)
+{
+    var startInfo = new ProcessStartInfo(fileName, arguments)
+    {
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        RedirectStandardInput = standardInput != null,
+        UseShellExecute = false,
+    };
+
+    using var process = Process.Start(startInfo)!;
+    if (standardInput != null)
+    {
+        await process.StandardInput.WriteAsync(standardInput);
+        process.StandardInput.Close();
+    }
+
+    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+    var stderrTask = process.StandardError.ReadToEndAsync();
+    await process.WaitForExitAsync();
+
+    return new ProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
+}
+
+internal sealed record ProcessResult(int ExitCode, string StdOut, string StdErr);
